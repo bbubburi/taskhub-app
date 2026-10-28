@@ -282,6 +282,14 @@ function openModal(title, content, copyable) {
   $("modal").hidden = false;
 }
 
+/* 앱 버전 표시: build_phone.py 가 만든 version.js 가 있을 때만(폰 판) */
+function versionLine() {
+  const v = window.TH_VERSION;
+  if (!v) return null;
+  const when = v.date ? ` · ${v.date}` : "";
+  return el("p", { class: "help ver", text: `내 할일 v${v.version} (빌드 ${v.build}${when})` });
+}
+
 /* ───────── 백업·복원 (폰 개인용 전용) ───────── */
 function fileStamp() { const n = new Date(), p = (x) => String(x).padStart(2, "0"); return `${n.getFullYear()}${p(n.getMonth() + 1)}${p(n.getDate())}_${p(n.getHours())}${p(n.getMinutes())}`; }
 async function showBackup() {
@@ -308,7 +316,7 @@ async function showBackup() {
         if (!confirm("방금 복원하기 전 상태로 되돌릴까요?")) return;
         try { L.restorePrev(); note("직전 상태로 되돌렸습니다."); await refresh(); } catch (e) { note(e.message, true); }
       } }) : null),
-    msg, fileIn);
+    msg, fileIn, versionLine());
   fileIn.addEventListener("change", async () => {
     const f = fileIn.files && fileIn.files[0]; if (!f) return;
     if (f.size > 5_000_000) { note("파일이 너무 큽니다(5MB 초과).", true); return; }

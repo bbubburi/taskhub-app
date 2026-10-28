@@ -2,8 +2,8 @@
    - 데이터(localStorage)는 서비스 워커가 건드리지 않는다. 저장하는 것은 앱 코드 파일뿐.
    - 새 버전을 배포했을 때는 CACHE 이름을 올리면(빌드 스크립트가 자동으로 올림) 옛 캐시가 지워지고 새 파일을 받는다.
    - 전략: 네트워크 우선(온라인이면 항상 최신), 실패하면 저장해 둔 파일. 그래서 고친 화면이 바로 반영된다. */
-const CACHE = "taskhub-phone-ef0fbdf2e6";
-const FILES = ["./", "./index.html", "./core.js", "./local.js", "./config.js", "./register-sw.js", "./mobile.css", "./app/app.js", "./app/style.css", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const CACHE = "taskhub-phone-d5a70a5bdb";
+const FILES = ["./", "./index.html", "./core.js", "./local.js", "./config.js", "./version.js", "./register-sw.js", "./mobile.css", "./app/app.js", "./app/style.css", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
