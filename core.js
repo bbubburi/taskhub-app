@@ -293,6 +293,17 @@
       if (item && !ID_RE.test(item)) throw new ValidationError("연결할 할 일 번호가 올바르지 않습니다.");
       cl.item = item;
     }
+    if ("pinned" in f) {
+      if (typeof f.pinned !== "boolean") throw new ValidationError("고정 여부는 true/false 여야 합니다.");
+      cl.pinned = f.pinned;
+    }
+    if (typeof cl.pinned !== "boolean") cl.pinned = false;
+    if ("pin_order" in f) {
+      const po = f.pin_order;
+      if (!Number.isInteger(po) || po < 0 || po > 1000000) throw new ValidationError("고정 순서가 올바르지 않습니다.");
+      cl.pin_order = po;
+    }
+    if (!Number.isInteger(cl.pin_order)) cl.pin_order = 0;
     for (const k of ["url", "host", "blob", "mime", "name"]) if (!(k in cl)) cl[k] = "";
     for (const k of ["w", "h", "bytes"]) if (!(k in cl)) cl[k] = 0;
     if (kind === "link") {
@@ -325,6 +336,14 @@
   function clipSortCompare(a, b) {
     const ca = a.created || "", cb = b.created || "";
     if (ca !== cb) return ca < cb ? 1 : -1;
+    const ia = a.id || "", ib = b.id || "";
+    return ia < ib ? 1 : ia > ib ? -1 : 0;
+  }
+  function pinSortCompare(a, b) {
+    const pa = a.pin_order || 0, pb = b.pin_order || 0;
+    if (pa !== pb) return pa - pb;
+    const ua = a.updated || "", ub = b.updated || "";
+    if (ua !== ub) return ua < ub ? 1 : -1;
     const ia = a.id || "", ib = b.id || "";
     return ia < ib ? 1 : ia > ib ? -1 : 0;
   }
@@ -520,6 +539,6 @@
     STATUSES, PRIORITIES, REPEATS, FIELDS, DONE, ValidationError,
     parseDate, parseTime, iso, today, toDay, ymd, shiftIso, weekRange, monthRange, yearRange,
     inPeriod, isOverdue, undated, sortCompare, nextOccurrence, progress, normalize, monthGrid, itemsByDay,
-    normalizeClip, clipSortCompare, clipFilter, CLIP_KINDS, CLIP_PHOTO_MIMES, CLIP_MAX_PHOTO, CLIP_MAX_FILE, cleanFilename, sectionOf, parseQuick, moveTo,
+    normalizeClip, clipSortCompare, pinSortCompare, clipFilter, CLIP_KINDS, CLIP_PHOTO_MIMES, CLIP_MAX_PHOTO, CLIP_MAX_FILE, cleanFilename, sectionOf, parseQuick, moveTo,
   };
 });

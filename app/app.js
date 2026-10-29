@@ -204,7 +204,64 @@ function computeCal() {
   const cells = monthCells(state.cal.y, state.cal.m);
   return { cells, by: byDay(matchQuery(state.items), cells) };
 }
-function renderCal() { $("side").replaceChildren(renderCalendar(computeCal())); }
+function renderCal() { $("side").replaceChildren(renderCalendar(computeCal()), ...sideCards()); }
+/* ───────── 달력 아래 카드: 선택한 날 · 한눈에 · 분야별 ─────────
+   계산(순수 함수)과 그리기를 나눈다. 계산은 화면 상태가 아니라 인자만 본다(tests/app_calendar.test.js 가 검증). */
+function dayAgenda(items, date) {                                              // 그 날 걸쳐 있는 미완료 일정: 시각 있는 것 먼저(빠른 순) → 우선순위 → 제목
+  return items.filter((it) => !isDone(it) && (it.start || it.due) && (it.start || it.due) <= date && date <= (it.due || it.start)).sort(cmpDay);
+}
+function nextDay(items, date) {                                                // date 이후 가장 가까운 일정 날짜(없으면 "")
+  let best = "";
+  for (const it of items) { if (isDone(it)) continue; const e = it.due || it.start; if (!e || e <= date) continue; const s = it.start && it.start > date ? it.start : (it.due && it.due > date ? it.due : ""); if (s && (!best || s < best)) best = s; }
+  return best;
+}
+function glance(items, t) {                                                    // 한눈에 숫자들
+  const open = items.filter((it) => !isDone(it)), by = {};
+  for (const it of open) by[sectionOf(it, t)] = (by[sectionOf(it, t)] || 0) + 1;
+  return { now: (by.today || 0) + (by.tomorrow || 0) + (by.week || 0) + (by.doing || 0), overdue: by.overdue || 0, hot: open.filter((it) => it.priority === "긴급" || it.priority === "높음").length, later: (by.later || 0) + (by.undated || 0), open: open.length };
+}
+function byDomain(items) {                                                     // 분야별 미완료 건수(많은 순, 같으면 이름순). 분야가 없는 것은 ‘미분류’
+  const m = new Map();
+  for (const it of items) { if (isDone(it)) continue; const k = (it.domain || "").trim() || "미분류"; m.set(k, (m.get(k) || 0) + 1); }
+  return [...m.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], "ko")).map(([name, n]) => ({ name, n }));
+}
+function agendaCard(all, date, isToday, extra) {                               // 하루 일정 카드. 오늘 카드는 항상, 다른 날 카드는 달력에서 날짜를 골랐을 때만
+  const ag = dayAgenda(all, date), nx = ag.length ? "" : nextDay(all, date);
+  return el("section", { class: "scard agenda" + (isToday ? " today" : ""), "data-day": date, "aria-label": isToday ? "오늘 일정" : "선택한 날 일정" },
+    el("h3", { class: "sc-h" }, isToday ? `오늘 일정 · ${+date.slice(5, 7)}/${+date.slice(8)}(${DOW[dowOf(date)]})` : dayTitle(date), el("span", { class: "sc-n", text: ag.length ? String(ag.length) : "" })),
+    ag.length ? el("div", { class: "ag-list" }, ag.slice(0, 8).map((it) => el("button", { class: "ag-row", type: "button", "data-id": it.id, onclick: () => openDetail(it.id) },
+      el("span", { class: "ag-time", text: it.time ? fmtRange(it) : "종일" }), el("span", { class: "ag-t", text: it.title }))), ag.length > 8 ? el("div", { class: "help", text: `외 ${ag.length - 8}건` }) : null)
+      : el("div", { class: "sc-empty" }, el("p", {}, isToday ? "오늘은 잡힌 일정이 없습니다." : "이 날은 일정이 없습니다."), nx ? el("button", { class: "linkbtn", type: "button", onclick: () => pickDay(nx), text: `다음 일정: ${+nx.slice(5, 7)}/${+nx.slice(8)}(${DOW[dowOf(nx)]}) ›` }) : null),
+    extra || null);
+}
+function sideCards() {
+  const t = todayIso(), all = matchQuery(state.items), cards = [];
+  // 1) 오늘 일정(항상) — 오늘 알아야 하는 일. 날짜 없이 진행 중인 일은 오늘 일정이 아니므로 건수만 알리고 ‘지금’ 탭으로 안내한다
+  const doingAll = state.items.filter((it) => !isDone(it) && sectionOf(it, t) === "doing").sort(cmpDay), doing = doingAll.length;
+  const todayExtra = doing ? el("div", { class: "doing-box" },
+    el("div", { class: "doing-h", text: `날짜 없이 진행 중 ${doing}건` }),
+    ...doingAll.slice(0, 3).map((it) => el("button", { class: "ag-row", type: "button", "data-id": it.id, onclick: () => openDetail(it.id) }, el("span", { class: "ag-time", text: it.priority === "긴급" || it.priority === "높음" ? it.priority : it.status }), el("span", { class: "ag-t", text: it.title }))),
+    el("button", { class: "linkbtn block", type: "button", "data-go": "now", onclick: () => { if (!confirmLeave()) return; state.detail = null; state.day = ""; state.tab = "now"; render(); }, text: doing > 3 ? `나머지 ${doing - 3}건 포함 모두 보기 ›` : "지금 탭에서 보기 ›" })) : null;
+  cards.push(agendaCard(all, t, true, todayExtra));
+  // 달력에서 오늘이 아닌 날을 골랐다면 그 날 카드를 따로 하나 더
+  if (state.day && state.day !== t) cards.push(agendaCard(all, state.day, false));
+  // 2) 한눈에: 누르면 그 탭으로
+  const g = glance(state.items, t), go = (tab) => () => { if (!confirmLeave()) return; state.detail = null; state.day = ""; state.q = ""; $("search").value = ""; state.tab = tab; render(); };
+  const stat = (n, label, tab, cls) => el("button", { class: "stat" + (cls ? " " + cls : ""), type: "button", "data-go": tab, onclick: go(tab) }, el("b", { text: String(n) }), el("span", { text: label }));
+  cards.push(el("section", { class: "scard glance", "aria-label": "한눈에" }, el("h3", { class: "sc-h" }, "한눈에"),
+    el("div", { class: "stats" }, stat(g.now, "지금 할 일", "now"), stat(g.overdue, "기한 지남", "overdue", g.overdue ? "warn" : ""), stat(g.later, "나중에", "later"),
+      el("div", { class: "stat static" + (g.hot ? " hot" : ""), "data-k": "hot" }, el("b", { text: String(g.hot) }), el("span", { text: "긴급·높음" })))));
+  // 3) 분야별 현황(미완료): 막대 + 누르면 그 분야만 검색
+  const dom = byDomain(state.items);
+  if (dom.length > 1 || (dom.length === 1 && dom[0].name !== "미분류")) {
+    const max = dom[0].n;
+    cards.push(el("section", { class: "scard domains", "aria-label": "분야별" }, el("h3", { class: "sc-h" }, "분야별 남은 일"),
+      el("div", { class: "dom-list" }, dom.slice(0, 6).map((d) => el("button", { class: "dom-row", type: "button", "data-domain": d.name, title: `${d.name} 만 보기`, onclick: () => { if (!confirmLeave()) return; state.detail = null; state.day = ""; state.q = d.name === "미분류" ? "" : d.name; $("search").value = state.q; state.tab = "now"; render(); } },
+        el("span", { class: "dn", text: d.name }), el("span", { class: "dbar" }, el("i", { style: `width:${Math.max(6, Math.round((d.n / max) * 100))}%` })), el("span", { class: "dc", text: String(d.n) }))),
+        dom.length > 6 ? el("div", { class: "help", text: `외 ${dom.length - 6}개 분야` }) : null)));
+  }
+  return cards;
+}
 function renderLeft(opts = {}) {
   const box = $("stageMain");
   if (opts.keepDirty && state.detail && isDirty()) return;                    // 입력 중인 상세는 데이터가 바뀌어도 덮어쓰지 않는다
@@ -712,7 +769,8 @@ function clipCard(c, opts = {}) {
     : c.kind === "link" ? el("div", { class: "linkhead" }, el("span", { class: "fav", text: (c.host || "?").slice(0, 1).toUpperCase() }), el("span", { class: "host", text: c.host }))
     : c.kind === "file" ? el("div", { class: "filehead" }, el("span", { class: "ext", text: (c.name.split(".").pop() || "").toUpperCase().slice(0, 4) }), el("span", { class: "fname", text: c.name }))
     : null;
-  return el("div", { class: "ccard " + c.kind, role: "button", tabindex: "0", "data-id": c.id, onclick: () => openClip(c.id), onkeydown: (e) => { if (e.key === "Enter") openClip(c.id); } },
+  return el("div", { class: "ccard " + c.kind + (c.pinned ? " pinned" : ""), role: "button", tabindex: "0", "data-id": c.id, onclick: () => openClip(c.id), onkeydown: (e) => { if (e.key === "Enter") openClip(c.id); } },
+    c.pinned ? el("span", { class: "pinmark", title: "고정됨", text: "📌" }) : null,
     head,
     c.title ? el("div", { class: "ct", text: c.title }) : (c.kind === "link" ? el("div", { class: "ct sub", text: c.url }) : null),
     c.kind === "file" ? el("div", { class: "ct sub", text: fmtBytes(c.bytes) }) : null,
@@ -728,7 +786,7 @@ function fmtClockIso(iso) {                                                    /
 }
 function clipMonths(clips) { return [...new Set(clips.map(clipDay).filter(Boolean).map((d) => d.slice(0, 7)))].sort().reverse(); }
 function clipGroups(clips, month) {
-  const dated = clips.filter((c) => clipDay(c) && (!month || clipDay(c).startsWith(month))), by = new Map();
+  const dated = clips.filter((c) => !c.pinned && clipDay(c) && (!month || clipDay(c).startsWith(month))), by = new Map();
   for (const c of dated) { const d = clipDay(c); if (!by.has(d)) by.set(d, []); by.get(d).push(c); }
   const t = todayIso(), ty = t.slice(0, 4);
   const groups = [...by.keys()].sort().reverse().map((d) => {
@@ -736,7 +794,7 @@ function clipGroups(clips, month) {
     const label = n === 0 ? "오늘" : n === -1 ? "어제" : `${d.slice(0, 4) === ty ? "" : d.slice(0, 4) + "년 "}${+d.slice(5, 7)}월 ${+d.slice(8)}일 ${DOW[dowOf(d)]}요일`;
     return { date: d, label, items };
   });
-  return { groups, undated: month ? [] : clips.filter((c) => !clipDay(c)) };
+  return { groups, undated: month ? [] : clips.filter((c) => !c.pinned && !clipDay(c)) };
 }
 const CLIP_ICON = { link: "링크", photo: "사진", note: "메모", file: "파일" };
 /* ───────── 저장 공간 · 정리 ─────────
@@ -787,7 +845,25 @@ async function showCleanup() {
     list, total, el("div", { class: "row-btns" }, delBtn)), false);
   sync();
 }
-function clipRow(c) {                                                           // 이력 보기의 한 줄: 종류 · 제목/내용 요약 · 보관한 시각
+function pinnedList(clips) { return clips.filter((c) => c.pinned).sort(window.THCore ? window.THCore.pinSortCompare : (x, y) => (x.pin_order || 0) - (y.pin_order || 0)); }
+async function setPinned(c, on) {
+  try { await api("PUT", `clips/${c.id}`, { pinned: on }); toast(on ? "맨 위에 고정했습니다." : "고정을 풀었습니다."); await refreshClips(); }
+  catch (e) { banner(e.message, true); }
+}
+async function movePin(c, dir) {                                                // dir: -1 위로 / +1 아래로. 고정된 전체 순서를 한 번에 저장한다
+  const ids = pinnedList(state.clips).map((x) => x.id), i = ids.indexOf(c.id), j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  try { await api("PUT", "clips/reorder", { ids }); await refreshClips(); }
+  catch (e) { banner(e.message, true); }
+}
+function pinBtns(c, idx, total) {                                                // 한 줄 오른쪽의 작은 버튼: 고정됨이면 ▲ ▼ 와 고정 해제, 아니면 고정
+  const b = (cls, label, text, fn, off) => el("button", { class: "pbtn " + cls, type: "button", "aria-label": label, title: label, text, disabled: !!off, onclick: (e) => { e.stopPropagation(); fn(); } });
+  return c.pinned
+    ? el("span", { class: "pins" }, b("up", `${c.name || c.title || CLIP_LABEL[c.kind]} 위로`, "▲", () => movePin(c, -1), idx === 0), b("dn", `${c.name || c.title || CLIP_LABEL[c.kind]} 아래로`, "▼", () => movePin(c, 1), idx === total - 1), b("off on", "고정 풀기", "📌", () => setPinned(c, false)))
+    : el("span", { class: "pins" }, b("off", "맨 위에 고정", "📌", () => setPinned(c, true)));
+}
+function clipRow(c, pinCtx) {                                                   // 이력 보기의 한 줄: 종류 · 제목/내용 요약 · 보관한 시각
   const text = c.kind === "file" ? c.name : c.title || (c.kind === "link" ? c.host : (c.body || "").split("\n")[0]) || CLIP_ICON[c.kind];
   const sub = c.kind === "link" ? c.url : c.kind === "file" ? fmtBytes(c.bytes) : c.title && c.body ? c.body.split("\n")[0] : "";
   const thumb = c.kind === "photo" ? (() => { const i = el("img", { alt: "", loading: "lazy", decoding: "async" }); loadPhoto(c, i); return el("span", { class: "hthumb" }, i); })() : null;
@@ -795,7 +871,8 @@ function clipRow(c) {                                                           
     thumb || el("span", { class: "hkind", text: CLIP_ICON[c.kind] }),
     el("span", { class: "hmain" }, el("span", { class: "ht", text: text }), sub ? el("span", { class: "hs", text: sub }) : null,
       (c.tags || []).length ? el("span", { class: "hs tags", text: c.tags.map((t) => "#" + t).join(" ") }) : null),
-    el("span", { class: "hwhen", text: fmtClockIso(c.created) }));
+    el("span", { class: "hwhen", text: fmtClockIso(c.created) }),
+    pinBtns(c, pinCtx ? pinCtx.i : -1, pinCtx ? pinCtx.n : 0));
 }
 function clipsShown() {
   let list = state.clips.filter((c) => state.clipKind === "all" || c.kind === state.clipKind);
@@ -803,7 +880,7 @@ function clipsShown() {
   return window.THCore ? window.THCore.clipFilter(list, state.q) : list.filter((c) => [c.title, c.body, c.url, (c.tags || []).join(" ")].join(" ").toLowerCase().includes(state.q.trim().toLowerCase()));
 }
 function clipAdder() {
-  const inp = el("textarea", { id: "clipAdd", class: "qa multi", rows: "1", placeholder: "링크·메모 붙여넣기 (Enter)", autocomplete: "off", "aria-label": "보관함에 추가" });
+  const inp = el("textarea", { id: "clipAdd", class: "qa multi", rows: "1", placeholder: "기억하고 싶은 것을 입력해주세요.", autocomplete: "off", "aria-label": "보관함에 추가" });
   inp.addEventListener("input", () => { inp.style.height = "auto"; inp.style.height = Math.min(inp.scrollHeight, 160) + "px"; });      // 입력한 줄 수만큼 늘어난다
   const add = async () => {
     const v = inp.value.trim(); if (!v) return;
@@ -870,15 +947,19 @@ function renderClips(opts = {}) {
   const list = clipsShown();
   const hist = state.clipLayout === "history";
   const g = hist ? clipGroups(list, state.clipMonth) : null;
+  const pins = hist ? pinnedList(list) : [];                                    // 검색·종류·태그 필터는 고정 칸에도 적용, 월 선택은 적용하지 않는다(고정은 늘 위에)
   const body = !list.length ? null
-    : hist ? el("div", { class: "history" }, g.groups.map((x) => el("section", { class: "day", "data-date": x.date },
-        el("h3", { class: "day-h" }, x.label, el("span", { class: "n", text: String(x.items.length) })), el("div", { class: "hlist" }, x.items.map(clipRow)))),
+    : hist ? el("div", { class: "history" },
+        pins.length ? el("section", { class: "day pinned-day", "data-date": "pinned" }, el("h3", { class: "day-h" }, "📌 고정됨", el("span", { class: "n", text: String(pins.length) })),
+          el("div", { class: "hlist" }, pins.map((c, i) => clipRow(c, { i, n: pins.length })))) : null,
+        g.groups.map((x) => el("section", { class: "day", "data-date": x.date },
+        el("h3", { class: "day-h" }, x.label, el("span", { class: "n", text: String(x.items.length) })), el("div", { class: "hlist" }, x.items.map((c) => clipRow(c))))),
         g.undated.length ? el("section", { class: "day", "data-date": "" }, el("h3", { class: "day-h" }, "보관한 날짜를 알 수 없음", el("span", { class: "n", text: String(g.undated.length) })), el("div", { class: "hlist" }, g.undated.map(clipRow))) : null)
-    : el("div", { class: "cgrid" }, list.map((c) => clipCard(c)));
+    : el("div", { class: "cgrid" }, [...pinnedList(list), ...list.filter((c) => !c.pinned)].map((c) => clipCard(c)));
   box.replaceChildren(clipAdder(),
     body ? body
       : el("div", { class: "empty" }, el("b", { text: state.q.trim() || state.clipKind !== "all" || state.clipTag ? "조건에 맞는 자료가 없습니다." : "보관함이 비어 있습니다." }),
-          state.q.trim() || state.clipKind !== "all" || state.clipTag ? null : "링크를 붙여넣거나 메모를 적고 Enter, 사진은 📷 로 올리세요."));
+          state.q.trim() || state.clipKind !== "all" || state.clipTag ? null : "링크·메모를 붙여넣고 Enter. 사진·파일은 ‘📎 파일·사진’ 버튼을 누르거나 이 화면에 끌어다 놓으세요."));
   renderClipSide();
 }
 function renderClipSide() {
@@ -906,7 +987,7 @@ function openClip(id, preset) { if (!confirmLeaveClip()) return; state.clipDetai
 function closeClip() { if (!confirmLeaveClip()) return false; state.clipDetail = null; render(); return true; }
 function readClipForm() {
   const v = (i) => ($(i) ? $(i).value : "");
-  return { title: v("c_title"), url: v("c_url"), body: v("c_body"), tags: v("c_tags"), item: v("c_item") };
+  return { title: v("c_title"), url: v("c_url"), body: v("c_body"), tags: v("c_tags"), item: v("c_item"), pinned: $("c_pinned") ? $("c_pinned").checked : false };
 }
 function isClipDirty() { return !!(state.clipDetail && state.clipDetail.snap && $("c_title") && JSON.stringify(readClipForm()) !== state.clipDetail.snap); }
 function confirmLeaveClip() { return !isClipDirty() || confirm("저장하지 않은 변경이 있습니다. 버릴까요?"); }
@@ -921,6 +1002,7 @@ function renderClipDetail() {
       isNew ? null : el("button", { class: "link danger", type: "button", id: "btnClipDelete", text: "삭제", onclick: deleteClip })),
     kind === "file" ? el("div", { class: "linkbox" }, el("button", { class: "open-link dl", type: "button", id: "btnDownload", text: `⬇ ${cl.name} 내려받기 (${fmtBytes(cl.bytes)})`, onclick: () => downloadFile(cl) }), el("div", { class: "help", text: "보관한 파일은 화면에서 열지 않고 내려받아 엽니다." })) : null,
     !isNew && cl.created ? el("div", { class: "help when", text: `보관한 때: ${cl.created.slice(0, 10)} ${fmtClockIso(cl.created)}` }) : null,
+    !isNew ? el("label", { class: "pinline" }, el("input", { type: "checkbox", id: "c_pinned", checked: !!cl.pinned }), el("span", { text: "📌 이력 맨 위에 고정" })) : null,
     kind === "photo" ? el("div", { class: "bigthumb" }, (() => { const i = el("img", { alt: cl.title || "사진" }); loadPhoto(cl, i); return i; })()) : null,
     kind === "link" ? el("div", { class: "linkbox" }, href ? el("a", { class: "open-link", href, target: "_blank", rel: "noopener noreferrer", text: `${cl.host} 열기 ↗` }) : el("span", { class: "help", text: "열 수 없는 주소입니다." }), el("div", { class: "help url", text: cl.url })) : null,
     fld("제목", inputEl("c_title", "text", cl.title, { placeholder: kind === "link" ? "예: 금융위 보도자료 (비워도 됩니다)" : "비워도 됩니다", maxlength: "200" }), { full: true }),

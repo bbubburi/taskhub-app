@@ -364,11 +364,29 @@
         const i = findClip(d, id);
         const f = {};
         for (const k of Object.keys(fields || {})) if (!["blob", "mime", "bytes", "w", "h", "kind"].includes(k)) f[k] = fields[k];   // 사진 본체·종류는 바꾸지 않는다
-        const cl = C.normalizeClip(f, d.clips[i]);
-        cl.id = d.clips[i].id; cl.created = d.clips[i].created; cl.updated = nowIso();
+        const before = d.clips[i];
+        const cl = C.normalizeClip(f, before);
+        cl.id = before.id; cl.created = before.created; cl.updated = nowIso();
+        if (cl.pinned && !before.pinned && !("pin_order" in f)) {                        // 새로 고정한 것은 맨 위
+          const others = d.clips.filter((x) => x.pinned && x.id !== id).map((x) => x.pin_order || 0);
+          cl.pin_order = others.length ? Math.min(...others) - 1 : 0;                   // 현재 맨 위보다 하나 더 위(음수 가능 — 내부 값). 순서를 바꾸면 0부터 다시 매긴다
+        }
+        if (!cl.pinned) cl.pin_order = 0;
         d.clips[i] = cl;
         log(d, "clip-update", id, Object.keys(fields || {}).sort().join(","));
         return cl;
+      });
+    }
+    // 고정된 항목의 순서를 한 번에 정한다(파이썬 core.reorder_pins 와 같은 규칙). ids: 위에서 아래 순서, 고정된 항목 전부가 정확히 한 번씩.
+    function reorderPins(ids) {
+      if (!Array.isArray(ids) || !ids.every((x) => typeof x === "string")) throw new C.ValidationError("순서 목록이 올바르지 않습니다.");
+      return mutate((d) => {
+        const pinned = new Set(d.clips.filter((c) => c.pinned).map((c) => c.id));
+        if (new Set(ids).size !== ids.length || ids.length !== pinned.size || !ids.every((x) => pinned.has(x))) throw new C.ValidationError("고정된 항목 전체를 한 번씩 보내야 합니다.");
+        const pos = new Map(ids.map((x, n) => [x, n]));
+        d.clips.forEach((c) => { if (pos.has(c.id)) c.pin_order = pos.get(c.id); });
+        log(d, "clip-reorder", "", ids.length + "개");
+        return d.clips.filter((c) => c.pinned).sort(C.pinSortCompare);
       });
     }
     async function deleteClip(id) {
@@ -440,6 +458,7 @@
         if (head === "inbox") return [];
         if (head === "clips" && parts.length === 1) return listClips(q.get("q") || "", q.get("item") || "");
       } else if (method === "POST" && head === "clips" && parts.length === 1) return addLink(body || {});
+      else if (method === "PUT" && head === "clips" && parts.length === 2 && parts[1] === "reorder") return reorderPins((body || {}).ids);
       else if (method === "PUT" && head === "clips" && parts.length === 2) return updateClip(parts[1], body || {});
       else if (method === "DELETE" && head === "clips" && parts.length === 2) { await deleteClip(parts[1]); return { ok: true }; }
       else if (method === "POST" && head === "items") return addItem(body || {});
@@ -515,7 +534,7 @@
     }
 
     return { handle, addItem, updateItem, deleteItem, view, counts, stats, exportData, replaceAll, hasPrev, restorePrev, sanitizeImport, key,
-      addLink, addPhoto, addFile, fileBlob, updateClip, deleteClip, listClips, photoBlob, orphans, cleanOrphans, blobs, storage, deleteMany, room };
+      addLink, addPhoto, addFile, fileBlob, updateClip, deleteClip, listClips, photoBlob, orphans, cleanOrphans, blobs, storage, deleteMany, room, reorderPins };
   }
 
   return { create, browserStorage, browserBlobs, memoryBlobs, sanitizeImport, KEY };
