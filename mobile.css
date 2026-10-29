@@ -1,34 +1,4 @@
-/* 폰 전용 보정. 공통 스타일(app/style.css = static/style.css)에 덧씌운다. */
-body.phone { padding-bottom: calc(84px + env(safe-area-inset-bottom)); -webkit-text-size-adjust: 100%; }
-.phone .top { padding: calc(8px + env(safe-area-inset-top)) 12px 8px; gap: 8px; }
-.phone .brand { font-size: 16px; }
-.phone .periods { max-width: 100%; overflow-x: auto; flex: 1 1 100%; order: 5; scrollbar-width: none; }
-.phone .periods::-webkit-scrollbar { display: none; }
-.phone #search { flex: 1 1 120px; min-width: 0; width: auto; }
-.phone .layout { padding: 12px; }
-.phone .btn, .phone .periods button, .phone .seg button { min-height: 40px; }
-.phone .card { padding: 12px; }
-
-/* 입력창 글자가 16px 미만이면 iOS Safari 가 포커스할 때 화면을 확대한다 → 16px 로 고정 */
-.phone input, .phone select, .phone textarea { font-size: 16px; }
-
-.fab { position: fixed; right: calc(16px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 28px; border: 0; background: var(--brand); color: var(--brand-ink); font-size: 30px; line-height: 1; box-shadow: 0 6px 18px rgba(20,30,50,.35); cursor: pointer; z-index: 15; }
-.fab:active { transform: scale(.96); }
-.phone .panel { width: 100vw; }
-.phone .panel-body { grid-template-columns: 1fr; padding-bottom: 24px; }
-.phone .panel-foot { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
-.phone .board { grid-auto-columns: minmax(78vw, 1fr); scroll-snap-type: x mandatory; }
-.phone .col { scroll-snap-align: start; }
-.phone .toast { bottom: calc(90px + env(safe-area-inset-bottom)); }
-.phone .act input[type=date] { width: 138px; }
-@media (max-width: 380px) { .phone .act { flex-wrap: wrap; } .phone .act input[type=text] { flex-basis: 100%; order: 2; } }
-
-/* 1) 토스트가 편집 폼 위에서 입력칸을 가리지 않도록: 폼이 열려 있으면 화면 위쪽에 띄운다(JS 가 body.form-open 을 켠다) */
-.phone .toast { z-index: 60; pointer-events: none; }
-body.phone.form-open .toast { top: calc(10px + env(safe-area-inset-top)); bottom: auto; }
-
-/* 2) 백업 창: <pre> 서식(배경·테두리)을 걷어낸다 */
-.modal-box pre.plain { background: transparent; border: 0; padding: 0; overflow: visible; }
-
-/* 3) 기간 탭이 옆으로 더 있을 때만 오른쪽 끝을 흐리게 해서 '더 있음'을 알린다(JS 가 .more 를 켠다) */
-.phone .periods.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+/* 내투두 전용 보정(홈 화면 앱·노치 있는 폰). 레이아웃 자체는 공통 스타일(app/style.css)이 화면 폭에 따라 알아서 바꾼다. */
+body.local { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+body.local .top { height: calc(var(--hdr) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+@media (display-mode: standalone) { body.local { overscroll-behavior-y: none; } }

@@ -3,75 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2b5fd9">
+<meta name="theme-color" content="#2f6df6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="내 할일">
+<meta name="apple-mobile-web-app-title" content="내투두">
 <meta name="mobile-web-app-capable" content="yes">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>내 할일</title>
+<title>내투두</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="app/style.css">
 <link rel="stylesheet" href="mobile.css">
 </head>
-<body class="phone">
-<header class="top">
-  <div class="brand">내 할일</div>
-  <div class="spaces" id="spaces" hidden></div>
-  <nav class="periods" id="periods" role="tablist" aria-label="기간"></nav>
-  <div class="spacer"></div>
-  <input id="search" type="search" placeholder="검색" aria-label="검색">
-  <div class="seg" id="viewMode" role="group" aria-label="보기 방식">
-    <button data-v="list" class="on">목록</button>
-    <button data-v="board">보드</button>
-  </div>
-  <button class="btn" id="btnReport" title="백업">백업</button>
-</header>
-
-<div id="banner" class="banner" hidden></div>
-
-<main class="layout no-inbox">
-  <section class="main" id="main" aria-live="polite"></section>
-  <aside class="inbox" id="inbox" hidden></aside>
-</main>
-
-<button class="fab" id="btnNew" aria-label="새 과제">＋</button>
-
-<div class="drawer" id="drawer" hidden>
-  <div class="drawer-bg" id="drawerBg"></div>
-  <form class="panel" id="form" autocomplete="off">
-    <div class="panel-head">
-      <h2 id="formTitle">과제</h2>
-      <button type="button" class="x" id="btnClose" aria-label="닫기">×</button>
-    </div>
-    <div class="panel-body" id="formBody"></div>
-    <div class="panel-foot">
-      <button type="button" class="btn danger" id="btnDelete">삭제</button>
-      <div class="spacer"></div>
-      <span class="msg" id="formMsg" role="alert"></span>
-      <button type="button" class="btn" id="btnCancel">취소</button>
-      <button type="submit" class="btn primary">저장</button>
-    </div>
-  </form>
-</div>
-
-<div class="modal" id="modal" hidden>
-  <div class="modal-bg"></div>
-  <div class="modal-box" role="dialog" aria-modal="true">
-    <h3 id="modalTitle"></h3>
-    <pre id="modalText"></pre>
-    <div class="modal-foot"><button class="btn" id="modalCopy">복사</button><button class="btn primary" id="modalClose">닫기</button></div>
-  </div>
-</div>
-
-<div class="toast" id="toast" role="status" hidden></div>
-
+<body class="local">
+<div id="app"></div>
 <script src="config.js"></script>
 <script src="version.js"></script>
 <script src="core.js"></script>
 <script src="local.js"></script>
+<script src="photo.js"></script>
 <script src="app/app.js"></script>
 <script src="register-sw.js"></script>
 </body>

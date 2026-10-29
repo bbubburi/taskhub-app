@@ -1,1 +1,1 @@
-window.TH_VERSION = {"version": "0.1.0", "build": "d5a70a5bdb", "date": "2026-10-28"};
+window.TH_VERSION = {"version": "0.3.0", "build": "aa85ddd172", "date": "2026-10-29"};
